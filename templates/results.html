@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}Attribution Results{% endblock %}
+
+{# Return column header label depends on trailing period length #}
+{% set return_label = "Cum. Return" if selected_periods|length > 1 else "Qtr Return" %}
+
+{% block content %}
+<div class="row mt-2">
+    <div class="col-12">
+        <!-- Controls bar -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body py-2">
+                <form method="get" action="{{ url_for('results') }}" id="controlsForm" class="row align-items-end g-3">
+                    <div class="col-auto">
+                        <label for="as_of" class="form-label mb-0 fw-bold">As of Quarter</label>
+                        <select name="as_of" id="as_of" class="form-select form-select-sm">
+                            {% for y, q in common_periods|reverse %}
+                            <option value="{{ y }}-{{ q }}" {{ 'selected' if as_of == (y, q) }}>
+                                {{ y }} Q{{ q }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-0 fw-bold">Trailing Period</label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            {% for key in trailing_period_order %}
+                            {% set label_map = {'1Q': '1Q', '1Y': '1Y', '3Y': '3Y', '5Y': '5Y', '7Y': '7Y', '10Y': '10Y', 'SI': 'Since Inception'} %}
+                            <button type="submit" name="trailing" value="{{ key }}"
+                                    class="btn {{ 'btn-primary' if trailing_key == key else 'btn-outline-primary' }}"
+                                    {{ 'disabled' if not available_trailing[key] }}>
+                                {{ label_map[key] }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-auto ms-auto">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">Upload New Files</a>
+                    </div>
+                    <input type="hidden" name="trailing" value="{{ trailing_key }}" id="hidden_trailing" disabled>
+                </form>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="mb-3">
+            <h4 class="d-inline">Attribution Analysis</h4>
+            <span class="text-muted ms-2">
+                {{ trailing_label }} as of {{ as_of[0] }} Q{{ as_of[1] }}
+                ({{ selected_periods|length }} quarter{{ 's' if selected_periods|length != 1 }})
+            </span>
+        </div>
+
+        <!-- Summary cards -->
+        {% if totals.by_property_type %}
+        {% set t = totals.by_property_type %}
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card summary-card">
+                    <div class="card-body text-center py-2">
+                        <div class="text-muted small">Portfolio Return</div>
+                        {% if t.n_quarters > 4 %}
+                        <div class="h4 mb-0">{{ "%.2f"|format(t.ann_rp * 100) }}%</div>
+                        <div class="text-muted" style="font-size:0.7rem">annualized</div>
+                        {% else %}
+                        <div class="h4 mb-0">{{ "%.2f"|format(t.cum_rp * 100) }}%</div>
+                        <div class="text-muted" style="font-size:0.7rem">cumulative</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card summary-card">
+                    <div class="card-body text-center py-2">
+                        <div class="text-muted small">Benchmark Return</div>
+                        {% if t.n_quarters > 4 %}
+                        <div class="h4 mb-0">{{ "%.2f"|format(t.ann_rb * 100) }}%</div>
+                        <div class="text-muted" style="font-size:0.7rem">annualized</div>
+                        {% else %}
+                        <div class="h4 mb-0">{{ "%.2f"|format(t.cum_rb * 100) }}%</div>
+                        <div class="text-muted" style="font-size:0.7rem">cumulative</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card summary-card">
+                    <div class="card-body text-center py-2">
+                        <div class="text-muted small">Total Active</div>
+                        <div class="h4 mb-0 {{ 'text-success' if t.Total_Active >= 0 else 'text-danger' }}">
+                            {{ "%.0f"|format(t.Total_Active * 10000) }} bps
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card summary-card">
+                    <div class="card-body text-center py-2">
+                        <div class="text-muted small">Allocation</div>
+                        <div class="h4 mb-0 {{ 'text-success' if t.Allocation >= 0 else 'text-danger' }}">
+                            {{ "%.0f"|format(t.Allocation * 10000) }} bps
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card summary-card">
+                    <div class="card-body text-center py-2">
+                        <div class="text-muted small">Selection</div>
+                        <div class="h4 mb-0 {{ 'text-success' if t.Selection >= 0 else 'text-danger' }}">
+                            {{ "%.0f"|format(t.Selection * 10000) }} bps
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" id="attributionTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="pt-tab" data-bs-toggle="tab" data-bs-target="#pt-pane" type="button">
+                    By Property Type
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="cbsa-tab" data-bs-toggle="tab" data-bs-target="#cbsa-pane" type="button">
+                    By CBSA
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="ptcbsa-tab" data-bs-toggle="tab" data-bs-target="#ptcbsa-pane" type="button">
+                    By Property Type &times; CBSA
+                </button>
+            </li>
+            {% if show_held_sold %}
+            <li class="nav-item">
+                <button class="nav-link" id="hs-tab" data-bs-toggle="tab" data-bs-target="#hs-pane" type="button">
+                    Held vs Sold
+                </button>
+            </li>
+            {% endif %}
+            <li class="nav-item">
+                <button class="nav-link" id="detail-tab" data-bs-toggle="tab" data-bs-target="#detail-pane" type="button">
+                    Period Detail
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="attributionTabContent">
+            <!-- BY PROPERTY TYPE -->
+            <div class="tab-pane fade show active" id="pt-pane" role="tabpanel">
+                <div class="d-flex justify-content-end my-2">
+                    <a href="{{ url_for('export', dimension='property_type', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm attribution-table" id="ptTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Property Type</th>
+                                <th class="text-end">Avg. Port. Wt</th>
+                                <th class="text-end">Avg. Bench. Wt</th>
+                                <th class="text-end">Wt Diff</th>
+                                <th class="text-end">Port. {{ return_label }}</th>
+                                <th class="text-end">Bench. {{ return_label }}</th>
+                                <th class="text-end">Return Diff</th>
+                                <th class="text-end">Allocation</th>
+                                <th class="text-end">Selection</th>
+                                <th class="text-end">Total Active</th>
+                                <th class="text-end">Port. Contrib.</th>
+                                <th class="text-end">Bench. Contrib.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in summaries.by_property_type %}
+                            <tr>
+                                <td class="fw-bold">{{ row.PropertyType }}</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
+                                <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
+                                <td class="text-end">{{ "%.4f"|format(row.Contribution_P * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.Contribution_B * 100) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% if totals.by_property_type %}
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td>TOTAL</td>
+                                <td class="text-end">{{ "%.2f"|format(totals.by_property_type.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.2f"|format(totals.by_property_type.w_b * 100) }}%</td>
+                                <td class="text-end">-</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.cum_rp * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.cum_rb * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (totals.by_property_type.cum_rp - totals.by_property_type.cum_rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((totals.by_property_type.cum_rp - totals.by_property_type.cum_rb) * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if totals.by_property_type.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Allocation * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if totals.by_property_type.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Selection * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if totals.by_property_type.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Total_Active * 10000) }} bps</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.Contribution_P * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.Contribution_B * 100) }}%</td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- BY CBSA -->
+            <div class="tab-pane fade" id="cbsa-pane" role="tabpanel">
+                <div class="d-flex justify-content-end my-2">
+                    <a href="{{ url_for('export', dimension='cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm attribution-table" id="cbsaTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>CBSA Name</th>
+                                <th class="text-end">Avg. Port. Wt</th>
+                                <th class="text-end">Avg. Bench. Wt</th>
+                                <th class="text-end">Wt Diff</th>
+                                <th class="text-end">Port. {{ return_label }}</th>
+                                <th class="text-end">Bench. {{ return_label }}</th>
+                                <th class="text-end">Return Diff</th>
+                                <th class="text-end">Allocation</th>
+                                <th class="text-end">Selection</th>
+                                <th class="text-end">Total Active</th>
+                                <th class="text-end">Port. Contrib.</th>
+                                <th class="text-end">Bench. Contrib.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in summaries.by_cbsa %}
+                            <tr>
+                                <td class="fw-bold">{{ row.CBSAName }}</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
+                                <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
+                                <td class="text-end">{{ "%.4f"|format(row.Contribution_P * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.Contribution_B * 100) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% if totals.by_cbsa %}
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td>TOTAL</td>
+                                <td class="text-end">{{ "%.2f"|format(totals.by_cbsa.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.2f"|format(totals.by_cbsa.w_b * 100) }}%</td>
+                                <td class="text-end">-</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.cum_rp * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.cum_rb * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (totals.by_cbsa.cum_rp - totals.by_cbsa.cum_rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((totals.by_cbsa.cum_rp - totals.by_cbsa.cum_rb) * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if totals.by_cbsa.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Allocation * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if totals.by_cbsa.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Selection * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if totals.by_cbsa.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Total_Active * 10000) }} bps</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.Contribution_P * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.Contribution_B * 100) }}%</td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+
+            <!-- BY PROPERTY TYPE x CBSA -->
+            <div class="tab-pane fade" id="ptcbsa-pane" role="tabpanel">
+                <div class="d-flex justify-content-end my-2">
+                    <a href="{{ url_for('export', dimension='property_type_cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm attribution-table" id="ptcbsaTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Property Type</th>
+                                <th>CBSA Name</th>
+                                <th class="text-end">Avg. Port. Wt</th>
+                                <th class="text-end">Avg. Bench. Wt</th>
+                                <th class="text-end">Wt Diff</th>
+                                <th class="text-end">Port. {{ return_label }}</th>
+                                <th class="text-end">Bench. {{ return_label }}</th>
+                                <th class="text-end">Allocation</th>
+                                <th class="text-end">Selection</th>
+                                <th class="text-end">Total Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in summaries.by_property_type_cbsa %}
+                            <tr>
+                                <td>{{ row.PropertyType }}</td>
+                                <td>{{ row.CBSAName }}</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
+                                <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
+                                <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if show_held_sold %}
+            <!-- HELD VS SOLD -->
+            <div class="tab-pane fade" id="hs-pane" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center my-2">
+                    <p class="text-muted mb-0 small">
+                        Held vs Sold attribution compares your held and sold property pools against the total benchmark.
+                        Since the benchmark has no Held/Sold distinction, allocation is zero and selection shows how each pool performed vs. the benchmark.
+                    </p>
+                    <a href="{{ url_for('export', dimension='held_sold', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success ms-3">Export to Excel</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm attribution-table" id="hsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Status</th>
+                                <th class="text-end">Avg. Port. Wt</th>
+                                <th class="text-end">Port. {{ return_label }}</th>
+                                <th class="text-end">Bench. {{ return_label }}</th>
+                                <th class="text-end">Return Diff</th>
+                                <th class="text-end">Selection</th>
+                                <th class="text-end">Total Active</th>
+                                <th class="text-end">Port. Contrib.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in summaries.by_held_sold %}
+                            <tr>
+                                <td class="fw-bold">{{ row.HeldSold }}</td>
+                                <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
+                                <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
+                                <td class="text-end">{{ "%.4f"|format(row.Contribution_P * 100) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- PERIOD DETAIL -->
+            <div class="tab-pane fade" id="detail-pane" role="tabpanel">
+                <div class="my-3">
+                    <h5>Quarterly Attribution by Property Type</h5>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm attribution-table" id="detailTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Year</th>
+                                    <th>Qtr</th>
+                                    <th>Property Type</th>
+                                    <th class="text-end">Port. Weight</th>
+                                    <th class="text-end">Bench. Weight</th>
+                                    <th class="text-end">Port. Qtr Return</th>
+                                    <th class="text-end">Bench. Qtr Return</th>
+                                    <th class="text-end">Bench. Total</th>
+                                    <th class="text-end">Allocation</th>
+                                    <th class="text-end">Selection</th>
+                                    <th class="text-end">Total Active</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in details.by_property_type %}
+                                <tr>
+                                    <td>{{ row.Year|int }}</td>
+                                    <td>Q{{ row.Quarter|int }}</td>
+                                    <td>{{ row.PropertyType }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
+                                    <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
+                                    <td class="text-end">{{ "%.4f"|format(row.r_p * 100) }}%</td>
+                                    <td class="text-end">{{ "%.4f"|format(row.r_b * 100) }}%</td>
+                                    <td class="text-end">{{ "%.4f"|format(row.R_b * 100) }}%</td>
+                                    <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
+                                    <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
+                                    <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // When as_of dropdown changes, submit with the hidden trailing value
+    $('#as_of').on('change', function() {
+        $('#hidden_trailing').prop('disabled', false);
+        $('#controlsForm').submit();
+    });
+
+    // When a trailing button is clicked, disable the hidden trailing
+    // so only the button's value is submitted (no duplicate param)
+    $('button[name="trailing"]').on('click', function() {
+        $('#hidden_trailing').prop('disabled', true);
+    });
+
+    ['#ptTable', '#cbsaTable', '#ptcbsaTable', '#hsTable', '#detailTable'].forEach(function(id) {
+        if ($(id + ' tbody tr').length > 0) {
+            $(id).DataTable({
+                paging: $(id + ' tbody tr').length > 25,
+                pageLength: 50,
+                order: [],
+                dom: 'frtip'
+            });
+        }
+    });
+
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
+        $.fn.dataTable.tables({visible: true, api: true}).columns.adjust();
+    });
+});
+</script>
+{% endblock %}

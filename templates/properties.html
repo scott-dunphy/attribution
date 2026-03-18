@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Properties - Attribution Analysis{% endblock %}
+
+{% block content %}
+<div class="row mt-2">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="d-inline">Portfolio Properties</h4>
+                <span class="text-muted ms-2">{{ properties|length }} properties</span>
+                <span class="badge bg-danger ms-2" id="soldBadge" style="{{ 'display:none' if sold_properties|length == 0 }}">
+                    <span id="soldCount">{{ sold_properties|length }}</span> marked as sold
+                </span>
+                {% set mismatched = [] %}
+                {% for prop in properties %}
+                    {% if prop.CBSAName not in benchmark_cbsas %}
+                        {% if mismatched.append(1) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+                <span class="badge bg-warning text-dark ms-2" id="mismatchBadge" style="{{ 'display:none' if mismatched|length == 0 }}">
+                    <span id="mismatchCount">{{ mismatched|length }}</span> CBSA mismatch{{ 'es' if mismatched|length != 1 }}
+                </span>
+            </div>
+            <button type="button" class="btn btn-primary" id="continueBtn">
+                Save &amp; Continue to Results
+            </button>
+        </div>
+
+        <p class="text-muted">
+            Review your properties below. Mark any properties that were sold during the analysis period.
+            {% if benchmark_cbsas %}
+            Properties with CBSAs that don't match the benchmark are highlighted &mdash;
+            use the dropdown to remap them to a benchmark CBSA.
+            {% endif %}
+        </p>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm" id="propertiesTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Sold</th>
+                        <th>Property ID</th>
+                        <th>Property Name</th>
+                        <th>Property Type</th>
+                        <th>CBSA</th>
+                        <th class="text-end">Quarters</th>
+                        <th>First Period</th>
+                        <th>Last Period</th>
+                        <th class="text-end">Latest MV</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prop in properties %}
+                    {% set is_mismatch = prop.CBSAName not in benchmark_cbsas and benchmark_cbsas|length > 0 %}
+                    {% set is_remapped = prop.OriginalCBSAName != prop.CBSAName %}
+                    <tr id="row-{{ prop.PropertyID }}"
+                        class="{{ 'table-warning' if prop.PropertyID in sold_properties }}{{ ' table-danger' if is_mismatch and not (prop.PropertyID in sold_properties) }}">
+                        <td>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input sold-toggle"
+                                       data-property-id="{{ prop.PropertyID }}"
+                                       {{ 'checked' if prop.PropertyID in sold_properties }}>
+                            </div>
+                        </td>
+                        <td>{{ prop.PropertyID }}</td>
+                        <td class="fw-bold">{{ prop.PropertyName }}</td>
+                        <td>{{ prop.PropertyType }}</td>
+                        <td class="cbsa-cell" data-property-id="{{ prop.PropertyID }}"
+                            data-original-cbsa="{{ prop.OriginalCBSAName }}">
+                            {% if is_mismatch %}
+                            <div class="d-flex align-items-center gap-1">
+                                <select class="form-select form-select-sm cbsa-remap"
+                                        data-property-id="{{ prop.PropertyID }}"
+                                        data-original-cbsa="{{ prop.OriginalCBSAName }}"
+                                        style="min-width: 280px;">
+                                    <option value="{{ prop.OriginalCBSAName }}" {{ 'selected' if not is_remapped }}>
+                                        {{ prop.OriginalCBSAName }} (not in benchmark)
+                                    </option>
+                                    {% for cbsa in benchmark_cbsas %}
+                                    <option value="{{ cbsa }}" {{ 'selected' if prop.CBSAName == cbsa }}>{{ cbsa }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% elif is_remapped %}
+                            <div class="d-flex align-items-center gap-1">
+                                <select class="form-select form-select-sm cbsa-remap"
+                                        data-property-id="{{ prop.PropertyID }}"
+                                        data-original-cbsa="{{ prop.OriginalCBSAName }}"
+                                        style="min-width: 280px;">
+                                    <option value="{{ prop.OriginalCBSAName }}">
+                                        {{ prop.OriginalCBSAName }} (original)
+                                    </option>
+                                    {% for cbsa in benchmark_cbsas %}
+                                    <option value="{{ cbsa }}" {{ 'selected' if prop.CBSAName == cbsa }}>{{ cbsa }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% else %}
+                            {{ prop.CBSAName }}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ prop.Quarters }}</td>
+                        <td>{{ prop.FirstPeriod }}</td>
+                        <td>{{ prop.LastPeriod }}</td>
+                        <td class="text-end">${{ "{:,.0f}".format(prop.LatestMV) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    var benchmarkCbsas = {{ benchmark_cbsas | tojson }};
+
+    if ($('#propertiesTable tbody tr').length > 0) {
+        $('#propertiesTable').DataTable({
+            paging: $('#propertiesTable tbody tr').length > 25,
+            pageLength: 50,
+            order: [[2, 'asc']],
+            dom: 'frtip',
+            columnDefs: [{ orderable: false, targets: [0, 4] }]
+        });
+    }
+
+    // Client-side sold toggle (no AJAX — just update UI)
+    function updateSoldBadge() {
+        var count = $('.sold-toggle:checked').length;
+        $('#soldCount').text(count);
+        if (count > 0) { $('#soldBadge').show(); } else { $('#soldBadge').hide(); }
+    }
+
+    $('.sold-toggle').on('change', function() {
+        var row = $('#row-' + $(this).data('property-id'));
+        if ($(this).is(':checked')) {
+            row.addClass('table-warning');
+        } else {
+            row.removeClass('table-warning');
+        }
+        updateSoldBadge();
+    });
+
+    // Client-side CBSA remap (no AJAX — just update UI)
+    function updateMismatchBadge() {
+        var count = 0;
+        $('.cbsa-remap').each(function() {
+            var val = $(this).val();
+            var original = $(this).data('original-cbsa');
+            if (val === original && benchmarkCbsas.indexOf(val) === -1) {
+                count++;
+            }
+        });
+        $('#mismatchCount').text(count);
+        if (count > 0) { $('#mismatchBadge').show(); } else { $('#mismatchBadge').hide(); }
+    }
+
+    $('.cbsa-remap').on('change', function() {
+        var row = $('#row-' + $(this).data('property-id'));
+        var original = $(this).data('original-cbsa');
+        var val = $(this).val();
+        if (val !== original || benchmarkCbsas.indexOf(val) !== -1) {
+            row.removeClass('table-danger');
+        } else {
+            row.addClass('table-danger');
+        }
+        updateMismatchBadge();
+    });
+
+    // Save all overrides and continue to results
+    $('#continueBtn').on('click', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span>Saving...');
+
+        var overrides = {};
+
+        // Collect sold flags
+        $('.sold-toggle').each(function() {
+            var propId = $(this).data('property-id');
+            if ($(this).is(':checked')) {
+                if (!overrides[propId]) overrides[propId] = {};
+                overrides[propId].sold = true;
+            }
+        });
+
+        // Collect CBSA remaps
+        $('.cbsa-remap').each(function() {
+            var propId = $(this).data('property-id');
+            var original = $(this).data('original-cbsa');
+            var val = $(this).val();
+            if (val !== original) {
+                if (!overrides[propId]) overrides[propId] = {};
+                overrides[propId].cbsa_override = val;
+            }
+        });
+
+        $.ajax({
+            url: '{{ url_for("save_overrides") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({overrides: overrides}),
+            success: function() {
+                window.location.href = '{{ url_for("results", as_of=as_of[0]|string + "-" + as_of[1]|string) }}';
+            },
+            error: function() {
+                btn.prop('disabled', false);
+                btn.html('Save &amp; Continue to Results');
+                alert('Error saving property overrides. Please try again.');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

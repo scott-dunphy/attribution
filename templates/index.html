@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Upload Files - Attribution Analysis{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Portfolio Attribution Analysis</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Upload your portfolio data and select a benchmark source to run
+                    Brinson-Hood-Beebower attribution analysis.
+                </p>
+
+                <!-- Benchmark Source -->
+                <h5 class="fw-bold mb-3">1. Benchmark Data (NCREIF ODCE)</h5>
+
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Fetch from NCREIF API</h6>
+                                <p class="text-muted small mb-0">
+                                    Pull the latest ODCE data directly. Cached locally so you only need to fetch once.
+                                </p>
+                            </div>
+                            {% if ncreif_cache %}
+                            <span class="badge bg-success">Cached</span>
+                            {% endif %}
+                        </div>
+
+                        {% if ncreif_cache %}
+                        <div class="alert alert-success py-2 px-3 mt-2 mb-2 small">
+                            Cached data available: {{ ncreif_cache.row_count|default('?')|int }} rows
+                            through {{ ncreif_cache.max_period|default('?') }}
+                            (fetched {{ ncreif_cache.age_description|default('unknown') }})
+                        </div>
+                        {% endif %}
+
+                        <div class="mt-2">
+                            <a class="small text-decoration-none" data-bs-toggle="collapse"
+                               href="#ncreifLogin" role="button">
+                                {% if ncreif_cache %}Refresh data...{% else %}Enter credentials...{% endif %}
+                            </a>
+                            <div class="collapse {% if not ncreif_cache %}show{% endif %}" id="ncreifLogin">
+                                <form action="{{ url_for('fetch_ncreif') }}" method="post" class="mt-2" id="ncreifForm">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col">
+                                            <input type="email" class="form-control form-control-sm"
+                                                   name="ncreif_email" placeholder="NCREIF email">
+                                        </div>
+                                        <div class="col">
+                                            <input type="password" class="form-control form-control-sm"
+                                                   name="ncreif_password" placeholder="Password">
+                                        </div>
+                                        <div class="col-auto">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" id="fetchBtn">
+                                                Fetch Data
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Takes ~30 seconds. Requires a NCREIF account with Query Tool access.</div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <!-- Upload Form -->
+                <h5 class="fw-bold mb-3">2. Upload Portfolio{% if not ncreif_cache %} &amp; Benchmark{% endif %}</h5>
+
+                <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" id="uploadForm">
+                    {% if ncreif_cache %}
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="radio" class="form-check-input" name="benchmark_source"
+                                   id="benchSrcCache" value="cache" checked>
+                            <label class="form-check-label" for="benchSrcCache">
+                                Use cached NCREIF data ({{ ncreif_cache.max_period }})
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="radio" class="form-check-input" name="benchmark_source"
+                                   id="benchSrcFile" value="file">
+                            <label class="form-check-label" for="benchSrcFile">
+                                Upload benchmark file instead
+                            </label>
+                        </div>
+                    </div>
+                    <input type="hidden" name="use_ncreif" id="useNcreif" value="1">
+                    {% endif %}
+
+                    <div class="mb-4 {% if ncreif_cache %}benchmark-upload-section{% endif %}"
+                         id="benchmarkUpload" {% if ncreif_cache %}style="display:none"{% endif %}>
+                        <label for="benchmark_file" class="form-label fw-bold">Benchmark File (NCREIF ODCE)</label>
+                        <input type="file" class="form-control" id="benchmark_file" name="benchmark_file"
+                               accept=".xlsx,.xls" {% if not ncreif_cache %}required{% endif %}>
+                        <div class="form-text">Excel file with NCREIF ODCE index returns data.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="portfolio_file" class="form-label fw-bold">Portfolio File</label>
+                        <input type="file" class="form-control" id="portfolio_file" name="portfolio_file"
+                               accept=".xlsx,.xls" required>
+                        <div class="form-text">Excel file with one row per property per quarter. Use the template below.</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            Run Attribution Analysis
+                        </button>
+                    </div>
+                </form>
+
+                <hr class="my-4">
+
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5 class="card-title">Need a Portfolio Template?</h5>
+                        <p class="card-text">
+                            Download a sample portfolio template with the correct columns and format.
+                        </p>
+                        <div class="d-flex align-items-center gap-3">
+                            <a href="{{ url_for('download_template') }}" class="btn btn-outline-secondary">
+                                Download Template
+                            </a>
+                            <span class="text-muted small">
+                                Or upload your benchmark to get a template customized with its property types and CBSAs:
+                            </span>
+                        </div>
+                        <form action="{{ url_for('download_template') }}" method="post" enctype="multipart/form-data" class="mt-2">
+                            <div class="input-group input-group-sm">
+                                <input type="file" class="form-control" name="benchmark_file"
+                                       accept=".xlsx,.xls" required>
+                                <button type="submit" class="btn btn-outline-secondary">
+                                    Download Customized Template
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Portfolio File Format (One Row Per Property Per Quarter)</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Description</th>
+                                <th>Example</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>Year</code></td><td>Year</td><td>2024</td></tr>
+                            <tr><td><code>Quarter</code></td><td>Quarter number</td><td>1</td></tr>
+                            <tr><td><code>YYYYQ</code></td><td>Year-quarter code</td><td>20241</td></tr>
+                            <tr><td><code>PropertyID</code></td><td>Unique property identifier</td><td>PROP-001</td></tr>
+                            <tr><td><code>PropertyName</code></td><td>Property name</td><td>Oakwood Industrial Park</td></tr>
+                            <tr><td><code>PropertyType</code></td><td>Property type</td><td>Industrial, Office, Retail, Residential, etc.</td></tr>
+                            <tr><td><code>CBSAName</code></td><td>Metro area (match benchmark CBSAs)</td><td>CA-Los Angeles-Long Beach-Glendale</td></tr>
+                            <tr><td><code>NOI</code></td><td>Net Operating Income ($)</td><td>1446527</td></tr>
+                            <tr><td><code>CapEx</code></td><td>Capital Expenditures ($)</td><td>835810</td></tr>
+                            <tr><td><code>MV</code></td><td>Market Value, end of quarter ($)</td><td>130600000</td></tr>
+                            <tr><td><code>MVLag1</code></td><td>Market Value, beginning of quarter ($)</td><td>111516100</td></tr>
+                            <tr><td><code>PSales</code></td><td>Partial Sales ($)</td><td>0</td></tr>
+                            <tr><td><code>Denom</code></td><td>Return denominator (adjusted BOQ MV)</td><td>111451829</td></tr>
+                            <tr><td><code>Income_Return</code></td><td>Quarterly income return (decimal)</td><td>0.0130</td></tr>
+                            <tr><td><code>Capital_Return</code></td><td>Quarterly capital return (decimal)</td><td>0.1637</td></tr>
+                            <tr><td><code>Total_Return</code></td><td>Quarterly total return (decimal)</td><td>0.1767</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted mt-2 mb-0">
+                    The app will automatically compute weighted returns by Property Type, by CBSA,
+                    and by Property Type x CBSA from your property-level data.
+                    Use the template download above to get a pre-formatted file with reference lists of
+                    valid Property Types and CBSA Names from the benchmark.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Toggle benchmark upload vs cache
+    $('input[name="benchmark_source"]').on('change', function() {
+        var useCache = $(this).val() === 'cache';
+        $('#benchmarkUpload').toggle(!useCache);
+        $('#useNcreif').val(useCache ? '1' : '0');
+        $('#benchmark_file').prop('required', !useCache);
+    });
+
+    // Show spinner on NCREIF fetch
+    $('#ncreifForm').on('submit', function() {
+        var btn = $('#fetchBtn');
+        btn.prop('disabled', true);
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span>Fetching...');
+    });
+});
+</script>
+{% endblock %}

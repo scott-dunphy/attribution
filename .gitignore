@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# App state
+.secret_key
+.flask_sessions/
+uploads/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# Data files (large)
+NCREIF_ODCE_Attribution_Data.xlsx
+Test_Portfolio_Full.xlsx
+test_portfolio.xlsx
+ncreif_odce_attribution_pull.py
