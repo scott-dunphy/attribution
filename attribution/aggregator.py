@@ -92,6 +92,12 @@ def aggregate_properties(df):
     df['Year'] = df['Year'].astype(int)
     df['Quarter'] = df['Quarter'].astype(int)
 
+    # Net Sale Price: when present and non-zero, use as ending MV for that quarter
+    if 'Net Sale Price' in df.columns:
+        df['Net Sale Price'] = pd.to_numeric(df['Net Sale Price'], errors='coerce').fillna(0.0)
+        has_nsp = df['Net Sale Price'] != 0
+        df.loc[has_nsp, 'MV'] = df.loc[has_nsp, 'Net Sale Price']
+
     # Determine Held/Sold classification if Sold column exists
     has_sold = 'Sold' in df.columns
     if has_sold:

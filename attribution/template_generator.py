@@ -6,7 +6,7 @@ from io import BytesIO
 PORTFOLIO_COLUMNS = [
     'Year', 'Quarter', 'YYYYQ',
     'PropertyID', 'PropertyName', 'PropertyType', 'CBSAName',
-    'NOI', 'CapEx', 'MV', 'MVLag1', 'PSales', 'Denom',
+    'NOI', 'CapEx', 'MV', 'MVLag1', 'PSales', 'Net Sale Price', 'Denom',
     'Income_Return', 'Capital_Return', 'Total_Return',
 ]
 
@@ -50,7 +50,7 @@ def generate_blank_template():
                 'PropertyType': pt, 'CBSAName': cbsa,
                 'NOI': round(noi), 'CapEx': round(capex),
                 'MV': round(mv), 'MVLag1': round(mv_lag),
-                'PSales': psales, 'Denom': round(denom),
+                'PSales': psales, 'Net Sale Price': 0, 'Denom': round(denom),
                 'Income_Return': round(income_ret, 6),
                 'Capital_Return': round(capital_ret, 6),
                 'Total_Return': round(total_ret, 6),
