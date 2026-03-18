@@ -34,11 +34,15 @@ def generate_blank_template():
             mv_lag = np.random.uniform(50_000_000, 200_000_000)
             noi = mv_lag * np.random.uniform(0.010, 0.020)
             capex = mv_lag * np.random.uniform(0.001, 0.005)
-            income_ret = noi / mv_lag
-            capital_ret = np.random.uniform(-0.03, 0.05)
+            psales = 0
+            # NCREIF Modified Dietz denominator
+            denom = mv_lag + capex / 2 - psales / 2 - noi / 3
+            income_ret = noi / denom
+            # Derive MV from a random appreciation factor so returns are consistent
+            appreciation = np.random.uniform(-0.03, 0.05)
+            mv = mv_lag * (1 + appreciation)
+            capital_ret = (mv - mv_lag - capex + psales) / denom
             total_ret = income_ret + capital_ret
-            mv = mv_lag * (1 + capital_ret)
-            denom = mv_lag - capex / 2
             rows.append({
                 'Year': year, 'Quarter': quarter,
                 'YYYYQ': year * 10 + quarter,
@@ -46,7 +50,7 @@ def generate_blank_template():
                 'PropertyType': pt, 'CBSAName': cbsa,
                 'NOI': round(noi), 'CapEx': round(capex),
                 'MV': round(mv), 'MVLag1': round(mv_lag),
-                'PSales': 0, 'Denom': round(denom),
+                'PSales': psales, 'Denom': round(denom),
                 'Income_Return': round(income_ret, 6),
                 'Capital_Return': round(capital_ret, 6),
                 'Total_Return': round(total_ret, 6),
@@ -117,11 +121,15 @@ def generate_template(benchmark_df, periods=None):
             mv_lag = np.random.uniform(50_000_000, 200_000_000)
             noi = mv_lag * np.random.uniform(0.010, 0.020)
             capex = mv_lag * np.random.uniform(0.001, 0.005)
-            income_ret = noi / mv_lag
-            capital_ret = np.random.uniform(-0.03, 0.05)
+            psales = 0
+            # NCREIF Modified Dietz denominator
+            denom = mv_lag + capex / 2 - psales / 2 - noi / 3
+            income_ret = noi / denom
+            # Derive MV from a random appreciation factor so returns are consistent
+            appreciation = np.random.uniform(-0.03, 0.05)
+            mv = mv_lag * (1 + appreciation)
+            capital_ret = (mv - mv_lag - capex + psales) / denom
             total_ret = income_ret + capital_ret
-            mv = mv_lag * (1 + capital_ret)
-            denom = mv_lag - capex / 2
             rows.append({
                 'Year': year,
                 'Quarter': quarter,
@@ -134,7 +142,7 @@ def generate_template(benchmark_df, periods=None):
                 'CapEx': round(capex),
                 'MV': round(mv),
                 'MVLag1': round(mv_lag),
-                'PSales': 0,
+                'PSales': psales,
                 'Denom': round(denom),
                 'Income_Return': round(income_ret, 6),
                 'Capital_Return': round(capital_ret, 6),

@@ -49,8 +49,19 @@ app.config['SESSION_CACHELIB'] = FileSystemCache(cache_dir=session_dir, threshol
 Session(app)
 
 
+def _get_session_dir():
+    """Return a session-specific upload directory, creating it if needed."""
+    sid = session.get('_upload_sid')
+    if not sid:
+        sid = uuid.uuid4().hex
+        session['_upload_sid'] = sid
+    d = os.path.join(app.config['UPLOAD_FOLDER'], sid)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def _workspace_path():
-    return os.path.join(app.config['UPLOAD_FOLDER'], 'workspace.json')
+    return os.path.join(_get_session_dir(), 'workspace.json')
 
 
 def _save_workspace(benchmark_path, portfolio_path):
@@ -94,13 +105,14 @@ def _restore_session_from_workspace():
 
 def _save_upload(file_storage, stable_name=None):
     """Save an uploaded file and return the path.
-    If stable_name is given, use it (overwriting any existing file)."""
+    If stable_name is given, use it (overwriting any existing file).
+    Files are stored in a session-specific directory to avoid collisions."""
     if stable_name:
         filename = stable_name
     else:
         safe_name = secure_filename(file_storage.filename) or 'upload.xlsx'
         filename = f"{uuid.uuid4().hex}_{safe_name}"
-    path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    path = os.path.join(_get_session_dir(), filename)
     file_storage.save(path)
     return path
 
@@ -118,12 +130,19 @@ def _get_overrides_path():
     p_path = session.get('portfolio_path')
     if not p_path:
         return None
-    # Overrides CSV sits next to the portfolio file, same name with _overrides.csv
     return os.path.splitext(p_path)[0] + '_overrides.csv'
 
 
+def _get_cbsa_map_path():
+    """Return the path to the CBSA remapping CSV, or None."""
+    p_path = session.get('portfolio_path')
+    if not p_path:
+        return None
+    return os.path.splitext(p_path)[0] + '_cbsa_map.csv'
+
+
 def _load_overrides():
-    """Load property overrides from CSV. Returns dict of {PropertyID: {sold, cbsa_override}}."""
+    """Load property sold flags from CSV. Returns dict of {PropertyID: {sold}}."""
     path = _get_overrides_path()
     if not path or not os.path.exists(path):
         return {}
@@ -133,7 +152,6 @@ def _load_overrides():
         for _, row in df.iterrows():
             overrides[row['PropertyID']] = {
                 'sold': row.get('Sold', '0') == '1',
-                'cbsa_override': row.get('CBSAOverride', ''),
             }
         return overrides
     except Exception:
@@ -141,17 +159,38 @@ def _load_overrides():
 
 
 def _save_overrides(overrides):
-    """Save property overrides dict to CSV."""
+    """Save property sold flags to CSV."""
     path = _get_overrides_path()
     if not path:
         return
     rows = []
     for prop_id, vals in overrides.items():
-        rows.append({
-            'PropertyID': prop_id,
-            'Sold': '1' if vals.get('sold') else '0',
-            'CBSAOverride': vals.get('cbsa_override', ''),
-        })
+        if vals.get('sold'):
+            rows.append({'PropertyID': prop_id, 'Sold': '1'})
+    if rows:
+        pd.DataFrame(rows).to_csv(path, index=False)
+    elif os.path.exists(path):
+        os.remove(path)
+
+
+def _load_cbsa_map():
+    """Load CBSA remappings from CSV. Returns dict of {original_cbsa: new_cbsa}."""
+    path = _get_cbsa_map_path()
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        df = pd.read_csv(path, dtype=str).fillna('')
+        return dict(zip(df['OriginalCBSA'], df['NewCBSA']))
+    except Exception:
+        return {}
+
+
+def _save_cbsa_map(cbsa_map):
+    """Save CBSA remappings to CSV."""
+    path = _get_cbsa_map_path()
+    if not path:
+        return
+    rows = [{'OriginalCBSA': k, 'NewCBSA': v} for k, v in cbsa_map.items() if v]
     if rows:
         pd.DataFrame(rows).to_csv(path, index=False)
     elif os.path.exists(path):
@@ -165,10 +204,8 @@ def _get_sold_properties():
 
 
 def _get_cbsa_remaps():
-    """Return dict of {PropertyID: new_cbsa} for properties with CBSA overrides."""
-    overrides = _load_overrides()
-    return {pid: v['cbsa_override'] for pid, v in overrides.items()
-            if v.get('cbsa_override')}
+    """Return dict of {original_cbsa: new_cbsa} for CBSA overrides."""
+    return _load_cbsa_map()
 
 
 def _load_portfolio_with_overrides(p_path):
@@ -182,13 +219,11 @@ def _load_portfolio_with_overrides(p_path):
                      'Income_Return', 'Capital_Return', 'Total_Return']:
             if col in raw_df.columns:
                 raw_df[col] = pd.to_numeric(raw_df[col], errors='coerce').fillna(0.0)
-        # Apply CBSA remaps from overrides CSV
-        cbsa_remaps = _get_cbsa_remaps()
-        if cbsa_remaps and 'PropertyID' in raw_df.columns:
-            for prop_id, new_cbsa in cbsa_remaps.items():
-                mask = raw_df['PropertyID'].astype(str) == str(prop_id)
-                raw_df.loc[mask, 'CBSAName'] = new_cbsa
-        # Apply sold flags from overrides CSV
+        # Apply CBSA remaps (CBSA-to-CBSA, applies to all properties in that CBSA)
+        cbsa_map = _get_cbsa_remaps()
+        if cbsa_map and 'CBSAName' in raw_df.columns:
+            raw_df['CBSAName'] = raw_df['CBSAName'].replace(cbsa_map)
+        # Apply sold flags
         sold_props = _get_sold_properties()
         if sold_props and 'PropertyID' in raw_df.columns:
             raw_df['Sold'] = raw_df['PropertyID'].astype(str).isin(
@@ -212,16 +247,16 @@ def _get_property_list(p_path):
     if not is_property_level(raw_df) or 'PropertyID' not in raw_df.columns:
         return None
 
-    # Apply CBSA remaps from overrides CSV so the list reflects current state
-    cbsa_remaps = _get_cbsa_remaps()
+    # Apply CBSA remaps so the list reflects current state
+    cbsa_map = _get_cbsa_remaps()
 
     props = []
     for pid, group in raw_df.groupby('PropertyID'):
         first = group.iloc[0]
         last = group.sort_values(['Year', 'Quarter']).iloc[-1]
         original_cbsa = first.get('CBSAName', '')
-        # Use remapped CBSA if one exists for this property
-        display_cbsa = cbsa_remaps.get(str(pid), original_cbsa)
+        # Use remapped CBSA if one exists for this CBSA
+        display_cbsa = cbsa_map.get(original_cbsa, original_cbsa)
         props.append({
             'PropertyID': pid,
             'PropertyName': first.get('PropertyName', ''),
@@ -262,18 +297,16 @@ def upload():
         return redirect(url_for('index'))
 
     try:
-        _cleanup_old_files()
-
-        # Resolve benchmark: NCREIF cache or uploaded file
+        # Save new files to temp names first, validate before committing
         if use_ncreif:
             b_path = get_cached_data_path(app.config['UPLOAD_FOLDER'])
             if not b_path:
                 flash('No cached NCREIF data. Fetch it first or upload a file.', 'error')
                 return redirect(url_for('index'))
         else:
-            b_path = _save_upload(benchmark_file, stable_name='current_benchmark.xlsx')
+            b_path = _save_upload(benchmark_file, stable_name='_pending_benchmark.xlsx')
 
-        p_path = _save_upload(portfolio_file, stable_name='current_portfolio.xlsx')
+        p_path = _save_upload(portfolio_file, stable_name='_pending_portfolio.xlsx')
 
         b_df = load_file(b_path)
         p_df = load_file(p_path)
@@ -282,6 +315,17 @@ def upload():
         if not common:
             flash('No overlapping time periods found between the two files.', 'error')
             return redirect(url_for('index'))
+
+        # Validation passed — promote pending files to stable names
+        _cleanup_old_files()
+        session_dir = _get_session_dir()
+        stable_b = b_path  # NCREIF cache path stays as-is
+        if not use_ncreif:
+            stable_b = os.path.join(session_dir, 'current_benchmark.xlsx')
+            os.replace(b_path, stable_b)
+        stable_p = os.path.join(session_dir, 'current_portfolio.xlsx')
+        os.replace(p_path, stable_p)
+        b_path, p_path = stable_b, stable_p
 
         # Check for CBSA / PropertyType mismatches
         b_cbsas = set(b_df[b_df['CBSAName'] != 'All']['CBSAName'].unique())
@@ -334,7 +378,7 @@ def upload():
 def properties():
     p_path = session.get('portfolio_path')
     b_path = session.get('benchmark_path')
-    if not p_path or not os.path.exists(p_path):
+    if not p_path or not os.path.exists(p_path) or not b_path or not os.path.exists(b_path):
         flash('Please upload files first.', 'error')
         return redirect(url_for('index'))
 
@@ -353,7 +397,10 @@ def properties():
     b_df = load_file(b_path)
     p_df = _load_portfolio_with_overrides(p_path)
     common = get_common_periods(p_df, b_df)
-    as_of = common[-1] if common else (2024, 4)
+    if not common:
+        flash('No overlapping time periods found between the two files.', 'error')
+        return redirect(url_for('index'))
+    as_of = common[-1]
 
     return render_template('properties.html',
                            properties=prop_list,
@@ -364,27 +411,24 @@ def properties():
 
 
 @app.route('/properties/save', methods=['POST'])
-def save_overrides():
+def save_overrides_route():
     """Save all property overrides (sold flags + CBSA remaps) in one shot."""
     data = request.get_json()
-    if not data or 'overrides' not in data:
-        return jsonify({'error': 'Missing overrides'}), 400
+    if not data:
+        return jsonify({'error': 'Missing data'}), 400
 
-    overrides = {}
-    for prop_id, vals in data['overrides'].items():
-        entry = {}
-        if vals.get('sold'):
-            entry['sold'] = True
-        if vals.get('cbsa_override'):
-            entry['cbsa_override'] = vals['cbsa_override']
-        if entry:
-            overrides[str(prop_id)] = {
-                'sold': entry.get('sold', False),
-                'cbsa_override': entry.get('cbsa_override', ''),
-            }
+    # Save sold flags (per property)
+    sold_overrides = {}
+    for prop_id, vals in data.get('sold', {}).items():
+        if vals:
+            sold_overrides[str(prop_id)] = {'sold': True}
+    _save_overrides(sold_overrides)
 
-    _save_overrides(overrides)
-    return jsonify({'ok': True, 'count': len(overrides)})
+    # Save CBSA remaps (per CBSA, applies to all properties in that CBSA)
+    cbsa_map = data.get('cbsa_map', {})
+    _save_cbsa_map(cbsa_map)
+
+    return jsonify({'ok': True})
 
 
 @app.route('/fetch-ncreif', methods=['POST'])
@@ -461,8 +505,13 @@ def results():
         # Get the periods for this trailing window
         periods = get_trailing_periods(common_periods, as_of, trailing_key)
 
+        # Reconciliation method: 'scale' (proportional) or 'residual' (raw + residual row)
+        recon_method = request.args.get('recon', 'scale')
+        if recon_method not in ('scale', 'residual'):
+            recon_method = 'scale'
+
         # Run attribution for selected trailing period
-        results_data = run_full_attribution(p_df, b_df, periods)
+        results_data = run_full_attribution(p_df, b_df, periods, method=recon_method)
 
         # Compute totals for each dimension
         def compute_totals(result):
@@ -539,7 +588,8 @@ def results():
                                available_trailing=available_trailing,
                                trailing_period_order=TRAILING_PERIOD_ORDER,
                                selected_periods=periods,
-                               show_held_sold=show_held_sold)
+                               show_held_sold=show_held_sold,
+                               recon_method=recon_method)
 
     except Exception as e:
         flash(f'Error computing attribution: {str(e)}', 'error')
@@ -607,7 +657,7 @@ def export(dimension):
     """Export attribution results to Excel."""
     b_path = session.get('benchmark_path')
     p_path = session.get('portfolio_path')
-    if not b_path or not p_path:
+    if not b_path or not p_path or not os.path.exists(b_path) or not os.path.exists(p_path):
         flash('Please upload files first.', 'error')
         return redirect(url_for('index'))
 
@@ -637,6 +687,10 @@ def export(dimension):
 
         periods = get_trailing_periods(common_periods, as_of, trailing_key)
 
+        recon_method = request.args.get('recon', 'scale')
+        if recon_method not in ('scale', 'residual'):
+            recon_method = 'scale'
+
         dim_map = {
             'property_type': 'PropertyType',
             'cbsa': 'CBSAName',
@@ -647,7 +701,7 @@ def export(dimension):
             flash('Invalid dimension.', 'error')
             return redirect(url_for('results'))
 
-        result = run_attribution(p_df, b_df, periods, dim_map[dimension])
+        result = run_attribution(p_df, b_df, periods, dim_map[dimension], method=recon_method)
 
         from io import BytesIO
         import pandas as pd

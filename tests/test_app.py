@@ -296,8 +296,12 @@ class TestUploadValid:
                 'portfolio_file': (pf, 'portfolio.xlsx'),
             }, content_type='multipart/form-data')
 
-        # At least two files should have been saved
-        files = os.listdir(upload_dir)
+        # Files are saved in a session-specific subdirectory
+        subdirs = [d for d in os.listdir(upload_dir)
+                   if os.path.isdir(os.path.join(upload_dir, d))]
+        assert len(subdirs) >= 1
+        session_dir = os.path.join(upload_dir, subdirs[0])
+        files = os.listdir(session_dir)
         assert len(files) >= 2
 
     def test_reupload_preserves_existing_property_overrides(self, client, benchmark_xlsx):
@@ -313,9 +317,19 @@ class TestUploadValid:
         assert '/properties' in resp.headers['Location']
 
         save_resp = client.post('/properties/save', json={
-            'overrides': {'PROP-001': {'sold': True}}
+            'sold': {'PROP-001': True},
+            'cbsa_map': {},
         })
         assert save_resp.status_code == 200
+
+        # Find overrides CSV in session subdirectory
+        upload_dir = app.config['UPLOAD_FOLDER']
+        subdirs = [d for d in os.listdir(upload_dir)
+                   if os.path.isdir(os.path.join(upload_dir, d))]
+        assert len(subdirs) >= 1
+        session_dir = os.path.join(upload_dir, subdirs[0])
+        overrides_path = os.path.join(session_dir, 'current_portfolio_overrides.csv')
+        assert os.path.exists(overrides_path)
 
         with open(benchmark_xlsx, 'rb') as bf:
             resp = client.post('/upload', data={
@@ -325,7 +339,7 @@ class TestUploadValid:
         assert resp.status_code == 302
         assert '/properties' in resp.headers['Location']
 
-        overrides_path = os.path.join(app.config['UPLOAD_FOLDER'], 'current_portfolio_overrides.csv')
+        # Overrides should persist across re-upload
         assert os.path.exists(overrides_path)
 
         props_resp = client.get('/properties')
@@ -521,11 +535,15 @@ class TestSessionCleanup:
                 'portfolio_file': (pf, 'portfolio.xlsx'),
             }, content_type='multipart/form-data')
 
-        # Stable files should exist
-        assert os.path.exists(os.path.join(upload_dir, 'current_benchmark.xlsx'))
-        assert os.path.exists(os.path.join(upload_dir, 'current_portfolio.xlsx'))
+        # Stable files should exist in a session subdirectory
+        subdirs = [d for d in os.listdir(upload_dir)
+                   if os.path.isdir(os.path.join(upload_dir, d))]
+        assert len(subdirs) >= 1
+        session_dir = os.path.join(upload_dir, subdirs[0])
+        assert os.path.exists(os.path.join(session_dir, 'current_benchmark.xlsx'))
+        assert os.path.exists(os.path.join(session_dir, 'current_portfolio.xlsx'))
 
-        first_mtime = os.path.getmtime(os.path.join(upload_dir, 'current_portfolio.xlsx'))
+        first_mtime = os.path.getmtime(os.path.join(session_dir, 'current_portfolio.xlsx'))
 
         # Second upload – files should be overwritten
         with open(benchmark_xlsx, 'rb') as bf, open(portfolio_xlsx, 'rb') as pf:
@@ -534,7 +552,7 @@ class TestSessionCleanup:
                 'portfolio_file': (pf, 'portfolio.xlsx'),
             }, content_type='multipart/form-data')
 
-        second_mtime = os.path.getmtime(os.path.join(upload_dir, 'current_portfolio.xlsx'))
+        second_mtime = os.path.getmtime(os.path.join(session_dir, 'current_portfolio.xlsx'))
         assert second_mtime >= first_mtime
 
 

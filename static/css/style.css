@@ -51,3 +51,9 @@ table.dataTable thead th {
     top: 0;
     z-index: 1;
 }
+
+tr.residual-row {
+    font-style: italic;
+    background-color: #f8f9fa !important;
+    border-top: 2px solid #dee2e6;
+}

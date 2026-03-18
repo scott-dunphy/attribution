@@ -161,14 +161,18 @@ def _compound_segment_returns(detail_df, merge_cols):
     return pd.DataFrame(records)
 
 
-def _link_effects(detail_df, merge_cols, cum_rp, cum_rb):
+def _link_effects(detail_df, merge_cols, cum_rp, cum_rb, method='scale'):
     """
     Link single-period BHB (MSCI) effects to multi-period cumulative
-    attribution using proportional scaling for exact reconciliation.
+    attribution.
+
+    method='scale': Proportional scaling — scale all segment effects so they
+        sum exactly to the cumulative geometric active return.
+    method='residual': No scaling — show raw effects and add a Residual/Other
+        row for the difference between raw sum and cumulative active return.
 
     1. Sum each segment's raw effects across all periods.
-    2. Scale proportionally so the grand total equals the cumulative
-       geometric active return (cum_rp - cum_rb).
+    2. Reconcile via chosen method.
     3. Compute cumulative compounded segment returns and contributions.
     """
     cum_active = cum_rp - cum_rb
@@ -180,30 +184,44 @@ def _link_effects(detail_df, merge_cols, cum_rp, cum_rb):
     agg_dict['w_b'] = 'mean'
     summary = detail_df.groupby(merge_cols, as_index=False).agg(agg_dict)
 
-    # Proportional scaling: scale effects so they sum to cum_active
-    raw_total = summary['Total_Active'].sum()
-    if abs(raw_total) > 1e-12:
-        scale = cum_active / raw_total
-        for col in effect_cols:
-            summary[col] = summary[col] * scale
-    elif abs(cum_active) > 1e-12:
-        # Raw effects cancelled out but there is a non-zero cumulative active return.
-        # Distribute residual evenly across segments, split 50/50 into Allocation/Selection
-        # so that Allocation + Selection = Total_Active per segment.
-        n_segs = len(summary)
-        if n_segs > 0:
-            per_seg = cum_active / n_segs
-            summary['Total_Active'] = per_seg
-            summary['Allocation'] = per_seg / 2
-            summary['Selection'] = per_seg / 2
+    if method == 'scale':
+        # Proportional scaling: scale effects so they sum to cum_active
+        raw_total = summary['Total_Active'].sum()
+        if abs(raw_total) > 1e-12:
+            scale = cum_active / raw_total
+            for col in effect_cols:
+                summary[col] = summary[col] * scale
+        elif abs(cum_active) > 1e-12:
+            n_segs = len(summary)
+            if n_segs > 0:
+                per_seg = cum_active / n_segs
+                summary['Total_Active'] = per_seg
+                summary['Allocation'] = per_seg / 2
+                summary['Selection'] = per_seg / 2
+    else:
+        # Residual method: leave raw effects, add residual row
+        raw_total = summary['Total_Active'].sum()
+        residual = cum_active - raw_total
+        if abs(residual) > 1e-12:
+            residual_row = {col: 0.0 for col in summary.columns if col not in merge_cols}
+            for col in merge_cols:
+                residual_row[col] = 'Residual/Other'
+            residual_row['Total_Active'] = residual
+            residual_row['Allocation'] = 0.0
+            residual_row['Selection'] = 0.0
+            residual_row['w_p'] = 0.0
+            residual_row['w_b'] = 0.0
+            summary = pd.concat([summary, pd.DataFrame([residual_row])], ignore_index=True)
 
     # Compute cumulative compounded segment returns
     seg_returns = _compound_segment_returns(detail_df, merge_cols)
     summary = summary.merge(seg_returns, on=merge_cols, how='left')
 
+    # Fill NaN for residual row's returns
+    summary['r_p_cum'] = summary['r_p_cum'].fillna(0.0)
+    summary['r_b_cum'] = summary['r_b_cum'].fillna(0.0)
+
     # Segment contributions: average weight * cumulative compounded segment return.
-    # These are descriptive (how much weight * how much the segment returned)
-    # and are not expected to sum to the total portfolio/benchmark return.
     summary['Contribution_P'] = summary['w_p'] * summary['r_p_cum']
     summary['Contribution_B'] = summary['w_b'] * summary['r_b_cum']
 
@@ -282,10 +300,11 @@ def get_available_trailing_periods(all_periods, as_of):
 # Main entry points
 # ---------------------------------------------------------------------------
 
-def run_attribution(portfolio_df, benchmark_df, periods, dimension):
+def run_attribution(portfolio_df, benchmark_df, periods, dimension, method='scale'):
     """
     Run Brinson-Fachler attribution across multiple periods for a given dimension.
-    Uses proportional scaling to reconcile linked effects to cumulative active return.
+
+    method: 'scale' for proportional scaling, 'residual' for raw effects + residual row.
     """
     results = []
     for year, quarter in periods:
@@ -311,7 +330,7 @@ def run_attribution(portfolio_df, benchmark_df, periods, dimension):
     ann_rb = _annualize(cum_rb, n_quarters)
 
     # Linked multi-period summary
-    summary = _link_effects(detail, merge_cols, cum_rp, cum_rb)
+    summary = _link_effects(detail, merge_cols, cum_rp, cum_rb, method=method)
     summary = summary.sort_values('Total_Active', ascending=False)
 
     return {
@@ -330,15 +349,15 @@ def has_held_sold(portfolio_df):
     return 'By_HeldSold' in portfolio_df['Query_Level'].values
 
 
-def run_full_attribution(portfolio_df, benchmark_df, periods):
+def run_full_attribution(portfolio_df, benchmark_df, periods, method='scale'):
     """Run attribution for all dimensions. Returns dict of results."""
     results = {
-        'by_property_type': run_attribution(portfolio_df, benchmark_df, periods, 'PropertyType'),
-        'by_cbsa': run_attribution(portfolio_df, benchmark_df, periods, 'CBSAName'),
-        'by_property_type_cbsa': run_attribution(portfolio_df, benchmark_df, periods, 'PropertyType_CBSAName'),
+        'by_property_type': run_attribution(portfolio_df, benchmark_df, periods, 'PropertyType', method=method),
+        'by_cbsa': run_attribution(portfolio_df, benchmark_df, periods, 'CBSAName', method=method),
+        'by_property_type_cbsa': run_attribution(portfolio_df, benchmark_df, periods, 'PropertyType_CBSAName', method=method),
     }
     if has_held_sold(portfolio_df):
-        results['by_held_sold'] = run_attribution(portfolio_df, benchmark_df, periods, 'HeldSold')
+        results['by_held_sold'] = run_attribution(portfolio_df, benchmark_df, periods, 'HeldSold', method=method)
     return results
 
 

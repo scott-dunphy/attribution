@@ -34,9 +34,23 @@
                             {% endfor %}
                         </div>
                     </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-0 fw-bold">Reconciliation</label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="submit" name="recon" value="scale"
+                                    class="btn {{ 'btn-primary' if recon_method == 'scale' else 'btn-outline-primary' }}">
+                                Scaled
+                            </button>
+                            <button type="submit" name="recon" value="residual"
+                                    class="btn {{ 'btn-primary' if recon_method == 'residual' else 'btn-outline-primary' }}">
+                                Residual Row
+                            </button>
+                        </div>
+                    </div>
                     <div class="col-auto ms-auto">
                         <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">Upload New Files</a>
                     </div>
+                    <input type="hidden" name="recon" value="{{ recon_method }}" id="hidden_recon" disabled>
                     <input type="hidden" name="trailing" value="{{ trailing_key }}" id="hidden_trailing" disabled>
                 </form>
             </div>
@@ -151,7 +165,7 @@
             <!-- BY PROPERTY TYPE -->
             <div class="tab-pane fade show active" id="pt-pane" role="tabpanel">
                 <div class="d-flex justify-content-end my-2">
-                    <a href="{{ url_for('export', dimension='property_type', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                    <a href="{{ url_for('export', dimension='property_type', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key, recon=recon_method) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover table-sm attribution-table" id="ptTable">
@@ -173,7 +187,7 @@
                         </thead>
                         <tbody>
                             {% for row in summaries.by_property_type %}
-                            <tr>
+                            <tr {{ 'class=residual-row' if row.PropertyType == 'Residual/Other' }}>
                                 <td class="fw-bold">{{ row.PropertyType }}</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
@@ -214,7 +228,7 @@
             <!-- BY CBSA -->
             <div class="tab-pane fade" id="cbsa-pane" role="tabpanel">
                 <div class="d-flex justify-content-end my-2">
-                    <a href="{{ url_for('export', dimension='cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                    <a href="{{ url_for('export', dimension='cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key, recon=recon_method) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover table-sm attribution-table" id="cbsaTable">
@@ -236,7 +250,7 @@
                         </thead>
                         <tbody>
                             {% for row in summaries.by_cbsa %}
-                            <tr>
+                            <tr {{ 'class=residual-row' if row.CBSAName == 'Residual/Other' }}>
                                 <td class="fw-bold">{{ row.CBSAName }}</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_b * 100) }}%</td>
@@ -277,7 +291,7 @@
             <!-- BY PROPERTY TYPE x CBSA -->
             <div class="tab-pane fade" id="ptcbsa-pane" role="tabpanel">
                 <div class="d-flex justify-content-end my-2">
-                    <a href="{{ url_for('export', dimension='property_type_cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
+                    <a href="{{ url_for('export', dimension='property_type_cbsa', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key, recon=recon_method) }}" class="btn btn-sm btn-outline-success">Export to Excel</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover table-sm attribution-table" id="ptcbsaTable">
@@ -297,7 +311,7 @@
                         </thead>
                         <tbody>
                             {% for row in summaries.by_property_type_cbsa %}
-                            <tr>
+                            <tr {{ 'class=residual-row' if row.PropertyType == 'Residual/Other' }}>
                                 <td>{{ row.PropertyType }}</td>
                                 <td>{{ row.CBSAName }}</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
@@ -323,7 +337,7 @@
                         Held vs Sold attribution compares your held and sold property pools against the total benchmark.
                         Since the benchmark has no Held/Sold distinction, allocation is zero and selection shows how each pool performed vs. the benchmark.
                     </p>
-                    <a href="{{ url_for('export', dimension='held_sold', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key) }}" class="btn btn-sm btn-outline-success ms-3">Export to Excel</a>
+                    <a href="{{ url_for('export', dimension='held_sold', as_of=as_of[0]|string + '-' + as_of[1]|string, trailing=trailing_key, recon=recon_method) }}" class="btn btn-sm btn-outline-success ms-3">Export to Excel</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover table-sm attribution-table" id="hsTable">
@@ -341,7 +355,7 @@
                         </thead>
                         <tbody>
                             {% for row in summaries.by_held_sold %}
-                            <tr>
+                            <tr {{ 'class=residual-row' if row.HeldSold == 'Residual/Other' }}>
                                 <td class="fw-bold">{{ row.HeldSold }}</td>
                                 <td class="text-end">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
@@ -408,16 +422,26 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // When as_of dropdown changes, submit with the hidden trailing value
+    // When as_of dropdown changes, submit with hidden trailing and recon values
     $('#as_of').on('change', function() {
         $('#hidden_trailing').prop('disabled', false);
+        $('#hidden_recon').prop('disabled', false);
         $('#controlsForm').submit();
     });
 
     // When a trailing button is clicked, disable the hidden trailing
     // so only the button's value is submitted (no duplicate param)
+    // but enable hidden recon to preserve the reconciliation method
     $('button[name="trailing"]').on('click', function() {
         $('#hidden_trailing').prop('disabled', true);
+        $('#hidden_recon').prop('disabled', false);
+    });
+
+    // When a recon button is clicked, disable the hidden recon
+    // but enable hidden trailing to preserve the trailing period
+    $('button[name="recon"]').on('click', function() {
+        $('#hidden_recon').prop('disabled', true);
+        $('#hidden_trailing').prop('disabled', false);
     });
 
     ['#ptTable', '#cbsaTable', '#ptcbsaTable', '#hsTable', '#detailTable'].forEach(function(id) {

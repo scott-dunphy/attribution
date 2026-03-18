@@ -8,7 +8,7 @@ By Property Type x CBSA) and caches the result as an Excel file.
 import os
 import time
 import json
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime, timedelta
 
 import requests

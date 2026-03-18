@@ -53,7 +53,7 @@
                     {% for prop in properties %}
                     {% set is_mismatch = prop.CBSAName not in benchmark_cbsas and benchmark_cbsas|length > 0 %}
                     {% set is_remapped = prop.OriginalCBSAName != prop.CBSAName %}
-                    <tr id="row-{{ prop.PropertyID }}"
+                    <tr data-row-id="{{ prop.PropertyID }}"
                         class="{{ 'table-warning' if prop.PropertyID in sold_properties }}{{ ' table-danger' if is_mismatch and not (prop.PropertyID in sold_properties) }}">
                         <td>
                             <div class="form-check">
@@ -135,7 +135,8 @@ $(document).ready(function() {
     }
 
     $('.sold-toggle').on('change', function() {
-        var row = $('#row-' + $(this).data('property-id'));
+        var pid = $(this).data('property-id');
+        var row = $(this).closest('tr');
         if ($(this).is(':checked')) {
             row.addClass('table-warning');
         } else {
@@ -144,12 +145,16 @@ $(document).ready(function() {
         updateSoldBadge();
     });
 
-    // Client-side CBSA remap (no AJAX — just update UI)
+    // Client-side CBSA remap — sync all dropdowns for the same original CBSA
     function updateMismatchBadge() {
+        // Count unique original CBSAs that are still unremapped
+        var seen = {};
         var count = 0;
         $('.cbsa-remap').each(function() {
-            var val = $(this).val();
             var original = $(this).data('original-cbsa');
+            if (seen[original]) return;
+            seen[original] = true;
+            var val = $(this).val();
             if (val === original && benchmarkCbsas.indexOf(val) === -1) {
                 count++;
             }
@@ -159,14 +164,21 @@ $(document).ready(function() {
     }
 
     $('.cbsa-remap').on('change', function() {
-        var row = $('#row-' + $(this).data('property-id'));
         var original = $(this).data('original-cbsa');
         var val = $(this).val();
-        if (val !== original || benchmarkCbsas.indexOf(val) !== -1) {
-            row.removeClass('table-danger');
-        } else {
-            row.addClass('table-danger');
-        }
+
+        // Sync all dropdowns with the same original CBSA
+        $('.cbsa-remap').each(function() {
+            if ($(this).data('original-cbsa') === original) {
+                $(this).val(val);
+                var row = $(this).closest('tr');
+                if (val !== original || benchmarkCbsas.indexOf(val) !== -1) {
+                    row.removeClass('table-danger');
+                } else {
+                    row.addClass('table-danger');
+                }
+            }
+        });
         updateMismatchBadge();
     });
 
@@ -176,33 +188,30 @@ $(document).ready(function() {
         btn.prop('disabled', true);
         btn.html('<span class="spinner-border spinner-border-sm me-1"></span>Saving...');
 
-        var overrides = {};
-
-        // Collect sold flags
+        // Collect sold flags (per property)
+        var sold = {};
         $('.sold-toggle').each(function() {
-            var propId = $(this).data('property-id');
+            var propId = String($(this).data('property-id'));
             if ($(this).is(':checked')) {
-                if (!overrides[propId]) overrides[propId] = {};
-                overrides[propId].sold = true;
+                sold[propId] = true;
             }
         });
 
-        // Collect CBSA remaps
+        // Collect CBSA remaps (per original CBSA — one entry per unique CBSA)
+        var cbsaMap = {};
         $('.cbsa-remap').each(function() {
-            var propId = $(this).data('property-id');
             var original = $(this).data('original-cbsa');
             var val = $(this).val();
             if (val !== original) {
-                if (!overrides[propId]) overrides[propId] = {};
-                overrides[propId].cbsa_override = val;
+                cbsaMap[original] = val;
             }
         });
 
         $.ajax({
-            url: '{{ url_for("save_overrides") }}',
+            url: '{{ url_for("save_overrides_route") }}',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({overrides: overrides}),
+            data: JSON.stringify({sold: sold, cbsa_map: cbsaMap}),
             success: function() {
                 window.location.href = '{{ url_for("results", as_of=as_of[0]|string + "-" + as_of[1]|string) }}';
             },

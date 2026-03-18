@@ -4,3 +4,4 @@ openpyxl>=3.1
 requests>=2.28
 flask-session>=0.8
 cachelib>=0.9
+defusedxml>=0.7
