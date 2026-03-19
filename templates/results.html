@@ -2,7 +2,8 @@
 {% block title %}Attribution Results{% endblock %}
 
 {# Return column header label depends on trailing period length #}
-{% set return_label = "Cum. Return" if selected_periods|length > 1 else "Qtr Return" %}
+{% set return_label = "Ann. Return" if selected_periods|length > 4 else ("Cum. Return" if selected_periods|length > 1 else "Qtr Return") %}
+{% set is_annualized = selected_periods|length > 4 %}
 
 {% block content %}
 <div class="row mt-2">
@@ -104,6 +105,7 @@
                         <div class="h4 mb-0 {{ 'text-success' if t.Total_Active >= 0 else 'text-danger' }}">
                             {{ "%.0f"|format(t.Total_Active * 10000) }} bps
                         </div>
+                        <div class="text-muted" style="font-size:0.7rem">{{ 'annualized' if t.n_quarters > 4 else 'cumulative' }}</div>
                     </div>
                 </div>
             </div>
@@ -210,9 +212,11 @@
                                 <td class="text-end">{{ "%.2f"|format(totals.by_property_type.w_p * 100) }}%</td>
                                 <td class="text-end">{{ "%.2f"|format(totals.by_property_type.w_b * 100) }}%</td>
                                 <td class="text-end">-</td>
-                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.cum_rp * 100) }}%</td>
-                                <td class="text-end">{{ "%.4f"|format(totals.by_property_type.cum_rb * 100) }}%</td>
-                                <td class="text-end {{ 'text-success' if (totals.by_property_type.cum_rp - totals.by_property_type.cum_rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((totals.by_property_type.cum_rp - totals.by_property_type.cum_rb) * 100) }}%</td>
+                                {% set rp = totals.by_property_type.ann_rp if is_annualized else totals.by_property_type.cum_rp %}
+                                {% set rb = totals.by_property_type.ann_rb if is_annualized else totals.by_property_type.cum_rb %}
+                                <td class="text-end">{{ "%.4f"|format(rp * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(rb * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (rp - rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((rp - rb) * 100) }}%</td>
                                 <td class="text-end {{ 'pos' if totals.by_property_type.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Allocation * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if totals.by_property_type.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Selection * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if totals.by_property_type.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_property_type.Total_Active * 10000) }} bps</td>
@@ -273,9 +277,11 @@
                                 <td class="text-end">{{ "%.2f"|format(totals.by_cbsa.w_p * 100) }}%</td>
                                 <td class="text-end">{{ "%.2f"|format(totals.by_cbsa.w_b * 100) }}%</td>
                                 <td class="text-end">-</td>
-                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.cum_rp * 100) }}%</td>
-                                <td class="text-end">{{ "%.4f"|format(totals.by_cbsa.cum_rb * 100) }}%</td>
-                                <td class="text-end {{ 'text-success' if (totals.by_cbsa.cum_rp - totals.by_cbsa.cum_rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((totals.by_cbsa.cum_rp - totals.by_cbsa.cum_rb) * 100) }}%</td>
+                                {% set rp = totals.by_cbsa.ann_rp if is_annualized else totals.by_cbsa.cum_rp %}
+                                {% set rb = totals.by_cbsa.ann_rb if is_annualized else totals.by_cbsa.cum_rb %}
+                                <td class="text-end">{{ "%.4f"|format(rp * 100) }}%</td>
+                                <td class="text-end">{{ "%.4f"|format(rb * 100) }}%</td>
+                                <td class="text-end {{ 'text-success' if (rp - rb) >= 0 else 'text-danger' }}">{{ "%.4f"|format((rp - rb) * 100) }}%</td>
                                 <td class="text-end {{ 'pos' if totals.by_cbsa.Allocation >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Allocation * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if totals.by_cbsa.Selection >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Selection * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if totals.by_cbsa.Total_Active >= 0 else 'neg' }}">{{ "%.2f"|format(totals.by_cbsa.Total_Active * 10000) }} bps</td>

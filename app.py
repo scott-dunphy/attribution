@@ -513,6 +513,34 @@ def results():
         # Run attribution for selected trailing period
         results_data = run_full_attribution(p_df, b_df, periods, method=recon_method)
 
+        # Annualize effects for periods > 4 quarters so everything is
+        # on the same basis as the annualized returns.
+        effect_cols = ['Allocation', 'Selection', 'Total_Active']
+
+        def _annualize_effects(result):
+            """Scale cumulative attribution effects to an annualized basis."""
+            if result['n_quarters'] <= 4:
+                return  # Sub-annual / 1-year: no annualization needed
+            cum_active = result['cum_rp'] - result['cum_rb']
+            ann_active = result['ann_rp'] - result['ann_rb']
+            if abs(cum_active) < 1e-12:
+                return  # No excess return to rescale
+            scale = ann_active / cum_active
+            summary = result['summary']
+            for col in effect_cols:
+                if col in summary.columns:
+                    summary[col] = summary[col] * scale
+            # Annualize segment-level cumulative returns
+            n_years = result['n_quarters'] / 4.0
+            for col in ['r_p_cum', 'r_b_cum']:
+                if col in summary.columns:
+                    summary[col] = summary[col].apply(
+                        lambda r: (1 + r) ** (1 / n_years) - 1 if r > -1 else -1.0
+                    )
+
+        for dim_result in results_data.values():
+            _annualize_effects(dim_result)
+
         # Compute totals for each dimension
         def compute_totals(result):
             summary = result['summary']
