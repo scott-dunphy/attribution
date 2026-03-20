@@ -28,10 +28,8 @@
 
         <p class="text-muted">
             Review your properties below. Mark any properties that were sold during the analysis period.
-            {% if benchmark_cbsas %}
-            Properties with CBSAs that don't match the benchmark are highlighted &mdash;
-            use the dropdown to remap them to a benchmark CBSA.
-            {% endif %}
+            Use the CBSA dropdown to override any property's CBSA classification.
+            Changing a CBSA will remap all properties that share the same original CBSA.
         </p>
 
         <div class="table-responsive">
@@ -67,37 +65,19 @@
                         <td>{{ prop.PropertyType }}</td>
                         <td class="cbsa-cell" data-property-id="{{ prop.PropertyID }}"
                             data-original-cbsa="{{ prop.OriginalCBSAName }}">
-                            {% if is_mismatch %}
-                            <div class="d-flex align-items-center gap-1">
-                                <select class="form-select form-select-sm cbsa-remap"
-                                        data-property-id="{{ prop.PropertyID }}"
-                                        data-original-cbsa="{{ prop.OriginalCBSAName }}"
-                                        style="min-width: 280px;">
-                                    <option value="{{ prop.OriginalCBSAName }}" {{ 'selected' if not is_remapped }}>
-                                        {{ prop.OriginalCBSAName }} (not in benchmark)
-                                    </option>
-                                    {% for cbsa in benchmark_cbsas %}
-                                    <option value="{{ cbsa }}" {{ 'selected' if prop.CBSAName == cbsa }}>{{ cbsa }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            {% elif is_remapped %}
-                            <div class="d-flex align-items-center gap-1">
-                                <select class="form-select form-select-sm cbsa-remap"
-                                        data-property-id="{{ prop.PropertyID }}"
-                                        data-original-cbsa="{{ prop.OriginalCBSAName }}"
-                                        style="min-width: 280px;">
-                                    <option value="{{ prop.OriginalCBSAName }}">
-                                        {{ prop.OriginalCBSAName }} (original)
-                                    </option>
-                                    {% for cbsa in benchmark_cbsas %}
-                                    <option value="{{ cbsa }}" {{ 'selected' if prop.CBSAName == cbsa }}>{{ cbsa }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            {% else %}
-                            {{ prop.CBSAName }}
-                            {% endif %}
+                            <select class="form-select form-select-sm cbsa-remap"
+                                    data-property-id="{{ prop.PropertyID }}"
+                                    data-original-cbsa="{{ prop.OriginalCBSAName }}"
+                                    style="min-width: 280px;">
+                                {% if prop.OriginalCBSAName not in benchmark_cbsas %}
+                                <option value="{{ prop.OriginalCBSAName }}" {{ 'selected' if not is_remapped }}>
+                                    {{ prop.OriginalCBSAName }} (not in benchmark)
+                                </option>
+                                {% endif %}
+                                {% for cbsa in benchmark_cbsas %}
+                                <option value="{{ cbsa }}" {{ 'selected' if prop.CBSAName == cbsa }}>{{ cbsa }}</option>
+                                {% endfor %}
+                            </select>
                         </td>
                         <td class="text-end">{{ prop.Quarters }}</td>
                         <td>{{ prop.FirstPeriod }}</td>
@@ -172,9 +152,11 @@ $(document).ready(function() {
             if ($(this).data('original-cbsa') === original) {
                 $(this).val(val);
                 var row = $(this).closest('tr');
-                if (val !== original || benchmarkCbsas.indexOf(val) !== -1) {
-                    row.removeClass('table-danger');
-                } else {
+                // Highlight remapped rows with info color, mismatched with danger
+                row.removeClass('table-danger table-info');
+                if (val !== original) {
+                    row.addClass('table-info');
+                } else if (benchmarkCbsas.indexOf(val) === -1) {
                     row.addClass('table-danger');
                 }
             }
