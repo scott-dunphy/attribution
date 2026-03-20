@@ -538,8 +538,20 @@ def results():
                         lambda r: (1 + r) ** (1 / n_years) - 1 if r > -1 else -1.0
                     )
 
+        def _blank_zero_weight_returns(result):
+            """Set segment returns to None where the portfolio or benchmark has no exposure."""
+            summary = result['summary']
+            if summary.empty:
+                return
+            import numpy as np
+            if 'r_p_cum' in summary.columns:
+                summary.loc[summary['w_p'].abs() < 1e-10, 'r_p_cum'] = np.nan
+            if 'r_b_cum' in summary.columns:
+                summary.loc[summary['w_b'].abs() < 1e-10, 'r_b_cum'] = np.nan
+
         for dim_result in results_data.values():
             _annualize_effects(dim_result)
+            _blank_zero_weight_returns(dim_result)
 
         # Compute totals for each dimension
         def compute_totals(result):

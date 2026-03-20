@@ -194,9 +194,9 @@
                                 <td class="text-end" data-order="{{ row.w_p }}">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end" data-order="{{ row.w_b }}">{{ "%.2f"|format(row.w_b * 100) }}%</td>
                                 <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}" data-order="{{ row.w_p - row.w_b }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
-                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                {% if row.r_p_cum == row.r_p_cum %}<td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_b_cum == row.r_b_cum %}<td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_p_cum == row.r_p_cum and row.r_b_cum == row.r_b_cum %}<td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
                                 <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}" data-order="{{ row.Allocation }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}" data-order="{{ row.Selection }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
                                 <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}" data-order="{{ row.Total_Active }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
@@ -259,9 +259,9 @@
                                 <td class="text-end" data-order="{{ row.w_p }}">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end" data-order="{{ row.w_b }}">{{ "%.2f"|format(row.w_b * 100) }}%</td>
                                 <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}" data-order="{{ row.w_p - row.w_b }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
-                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                {% if row.r_p_cum == row.r_p_cum %}<td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_b_cum == row.r_b_cum %}<td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_p_cum == row.r_p_cum and row.r_b_cum == row.r_b_cum %}<td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
                                 <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}" data-order="{{ row.Allocation }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}" data-order="{{ row.Selection }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
                                 <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}" data-order="{{ row.Total_Active }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
@@ -323,8 +323,8 @@
                                 <td class="text-end" data-order="{{ row.w_p }}">{{ "%.2f"|format(row.w_p * 100) }}%</td>
                                 <td class="text-end" data-order="{{ row.w_b }}">{{ "%.2f"|format(row.w_b * 100) }}%</td>
                                 <td class="text-end {{ 'text-success' if (row.w_p - row.w_b) >= 0 else 'text-danger' }}" data-order="{{ row.w_p - row.w_b }}">{{ "%.2f"|format((row.w_p - row.w_b) * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
+                                {% if row.r_p_cum == row.r_p_cum %}<td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_b_cum == row.r_b_cum %}<td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
                                 <td class="text-end {{ 'pos' if row.Allocation >= 0 else 'neg' }}" data-order="{{ row.Allocation }}">{{ "%.2f"|format(row.Allocation * 10000) }} bps</td>
                                 <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}" data-order="{{ row.Selection }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
                                 <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}" data-order="{{ row.Total_Active }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
@@ -364,9 +364,9 @@
                             <tr {{ 'class=residual-row' if row.HeldSold == 'Residual/Other' }}>
                                 <td class="fw-bold">{{ row.HeldSold }}</td>
                                 <td class="text-end" data-order="{{ row.w_p }}">{{ "%.2f"|format(row.w_p * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>
-                                <td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>
-                                <td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>
+                                {% if row.r_p_cum == row.r_p_cum %}<td class="text-end" data-order="{{ row.r_p_cum }}">{{ "%.4f"|format(row.r_p_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_b_cum == row.r_b_cum %}<td class="text-end" data-order="{{ row.r_b_cum }}">{{ "%.4f"|format(row.r_b_cum * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
+                                {% if row.r_p_cum == row.r_p_cum and row.r_b_cum == row.r_b_cum %}<td class="text-end {{ 'text-success' if (row.r_p_cum - row.r_b_cum) >= 0 else 'text-danger' }}" data-order="{{ row.r_p_cum - row.r_b_cum }}">{{ "%.4f"|format((row.r_p_cum - row.r_b_cum) * 100) }}%</td>{% else %}<td class="text-end text-muted" data-order="">-</td>{% endif %}
                                 <td class="text-end {{ 'pos' if row.Selection >= 0 else 'neg' }}" data-order="{{ row.Selection }}">{{ "%.2f"|format(row.Selection * 10000) }} bps</td>
                                 <td class="text-end fw-bold {{ 'pos' if row.Total_Active >= 0 else 'neg' }}" data-order="{{ row.Total_Active }}">{{ "%.2f"|format(row.Total_Active * 10000) }} bps</td>
                                 <td class="text-end" data-order="{{ row.Contribution_P }}">{{ "%.4f"|format(row.Contribution_P * 100) }}%</td>
