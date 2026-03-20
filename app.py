@@ -624,6 +624,16 @@ def results():
                 if pt in pts and cbsa in cbsas:
                     diff = row['w_p'] - row['w_b']
                     heatmap['cells'][(pt, cbsa)] = round(diff * 100, 2)
+            # Row totals (per CBSA) and column totals (per PropertyType)
+            row_totals = {}
+            col_totals = {}
+            for cbsa in cbsas:
+                row_totals[cbsa] = round(sum(heatmap['cells'].get((pt, cbsa), 0) for pt in pts), 2)
+            for pt in pts:
+                col_totals[pt] = round(sum(heatmap['cells'].get((pt, cbsa), 0) for cbsa in cbsas), 2)
+            heatmap['row_totals'] = row_totals
+            heatmap['col_totals'] = col_totals
+            heatmap['grand_total'] = round(sum(row_totals.values()), 2)
 
         # Trailing period label
         n_q = TRAILING_PERIOD_DEFS.get(trailing_key)

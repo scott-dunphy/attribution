@@ -389,20 +389,21 @@
                     <h5>Portfolio Over/Under Exposure vs. Benchmark</h5>
                     <p class="text-muted small mb-2">Cell values show the weight difference (Portfolio Weight &minus; Benchmark Weight) in percentage points.</p>
                     {% if heatmap.property_types and heatmap.cbsas %}
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
                         <table class="table table-bordered table-sm" id="heatmapTable">
-                            <thead class="table-dark">
+                            <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
                                 <tr>
-                                    <th>CBSA</th>
+                                    <th style="white-space: nowrap; width: 1%;">CBSA</th>
                                     {% for pt in heatmap.property_types %}
                                     <th class="text-center">{{ pt }}</th>
                                     {% endfor %}
+                                    <th class="text-center">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for cbsa in heatmap.cbsas %}
                                 <tr>
-                                    <td class="fw-bold">{{ cbsa }}</td>
+                                    <td class="fw-bold" style="white-space: nowrap;">{{ cbsa }}</td>
                                     {% for pt in heatmap.property_types %}
                                     {% set val = heatmap.cells.get((pt, cbsa)) %}
                                     {% if val is not none %}
@@ -419,9 +420,22 @@
                                     <td class="text-center text-muted" data-order="">-</td>
                                     {% endif %}
                                     {% endfor %}
+                                    {% set rt = heatmap.row_totals.get(cbsa, 0) %}
+                                    <td class="text-center fw-bold" style="background-color: {% if rt > 0 %}rgba(40, 167, 69, 0.15){% elif rt < 0 %}rgba(220, 53, 69, 0.15){% else %}rgba(0,0,0,0.03){% endif %};">{{ "%.2f"|format(rt) }}%</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
+                            <tfoot class="table-secondary fw-bold">
+                                <tr>
+                                    <td>Total</td>
+                                    {% for pt in heatmap.property_types %}
+                                    {% set ct = heatmap.col_totals.get(pt, 0) %}
+                                    <td class="text-center" style="background-color: {% if ct > 0 %}rgba(40, 167, 69, 0.15){% elif ct < 0 %}rgba(220, 53, 69, 0.15){% else %}rgba(0,0,0,0.03){% endif %};">{{ "%.2f"|format(ct) }}%</td>
+                                    {% endfor %}
+                                    {% set gt = heatmap.grand_total %}
+                                    <td class="text-center" style="background-color: {% if gt > 0 %}rgba(40, 167, 69, 0.15){% elif gt < 0 %}rgba(220, 53, 69, 0.15){% else %}rgba(0,0,0,0.03){% endif %};">{{ "%.2f"|format(gt) }}%</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     {% else %}
