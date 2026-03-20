@@ -386,8 +386,89 @@
             <!-- EXPOSURE HEATMAP -->
             <div class="tab-pane fade" id="heatmap-pane" role="tabpanel">
                 <div class="my-3">
-                    <h5>Portfolio Over/Under Exposure vs. Benchmark</h5>
-                    <p class="text-muted small mb-2">Cell values show the weight difference (Portfolio Weight &minus; Benchmark Weight) in percentage points.</p>
+                    <p class="text-muted small mb-3">Weight differences (Portfolio &minus; Benchmark) in percentage points. Green = overweight, Red = underweight.</p>
+
+                    <!-- Single-dimension heatmaps side by side -->
+                    <div class="row mb-4">
+                        <!-- By Property Type -->
+                        <div class="col-md-6">
+                            <h6>By Property Type</h6>
+                            {% if heatmap_pt %}
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Property Type</th>
+                                        <th class="text-center">Port. Wt</th>
+                                        <th class="text-center">Bench. Wt</th>
+                                        <th class="text-center">Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in heatmap_pt %}
+                                    <tr>
+                                        <td class="fw-bold">{{ row.name }}</td>
+                                        <td class="text-center">{{ "%.2f"|format(row.w_p) }}%</td>
+                                        <td class="text-center">{{ "%.2f"|format(row.w_b) }}%</td>
+                                        {% if row.diff > 0 %}
+                                        {% set intensity = [row.diff / 10.0, 1.0] | min %}
+                                        <td class="text-center fw-bold" style="background-color: rgba(40, 167, 69, {{ "%.2f"|format(intensity * 0.6) }}); color: {{ '#000' if intensity < 0.5 else '#fff' }};">+{{ "%.2f"|format(row.diff) }}%</td>
+                                        {% elif row.diff < 0 %}
+                                        {% set intensity = [(-row.diff) / 10.0, 1.0] | min %}
+                                        <td class="text-center fw-bold" style="background-color: rgba(220, 53, 69, {{ "%.2f"|format(intensity * 0.6) }}); color: {{ '#000' if intensity < 0.5 else '#fff' }};">{{ "%.2f"|format(row.diff) }}%</td>
+                                        {% else %}
+                                        <td class="text-center" style="background-color: rgba(0,0,0,0.03);">0.00%</td>
+                                        {% endif %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <p class="text-muted">No data available.</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- By CBSA -->
+                        <div class="col-md-6">
+                            <h6>By CBSA</h6>
+                            {% if heatmap_cbsa %}
+                            <div style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th>CBSA</th>
+                                        <th class="text-center">Port. Wt</th>
+                                        <th class="text-center">Bench. Wt</th>
+                                        <th class="text-center">Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in heatmap_cbsa %}
+                                    <tr>
+                                        <td class="fw-bold" style="white-space: nowrap;">{{ row.name }}</td>
+                                        <td class="text-center">{{ "%.2f"|format(row.w_p) }}%</td>
+                                        <td class="text-center">{{ "%.2f"|format(row.w_b) }}%</td>
+                                        {% if row.diff > 0 %}
+                                        {% set intensity = [row.diff / 10.0, 1.0] | min %}
+                                        <td class="text-center fw-bold" style="background-color: rgba(40, 167, 69, {{ "%.2f"|format(intensity * 0.6) }}); color: {{ '#000' if intensity < 0.5 else '#fff' }};">+{{ "%.2f"|format(row.diff) }}%</td>
+                                        {% elif row.diff < 0 %}
+                                        {% set intensity = [(-row.diff) / 10.0, 1.0] | min %}
+                                        <td class="text-center fw-bold" style="background-color: rgba(220, 53, 69, {{ "%.2f"|format(intensity * 0.6) }}); color: {{ '#000' if intensity < 0.5 else '#fff' }};">{{ "%.2f"|format(row.diff) }}%</td>
+                                        {% else %}
+                                        <td class="text-center" style="background-color: rgba(0,0,0,0.03);">0.00%</td>
+                                        {% endif %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            </div>
+                            {% else %}
+                            <p class="text-muted">No data available.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Cross-dimension heatmap -->
+                    <h6>By Property Type &times; CBSA</h6>
                     {% if heatmap.property_types and heatmap.cbsas %}
                     <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
                         <table class="table table-bordered table-sm" id="heatmapTable">

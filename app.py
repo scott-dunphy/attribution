@@ -635,6 +635,26 @@ def results():
             heatmap['col_totals'] = col_totals
             heatmap['grand_total'] = round(sum(row_totals.values()), 2)
 
+        # Build single-dimension heatmap data for PropertyType and CBSA
+        def _build_1d_heatmap(summary_df, key_col):
+            if summary_df.empty:
+                return []
+            rows = []
+            for _, row in summary_df.iterrows():
+                name = row.get(key_col)
+                if name == 'Residual/Other':
+                    continue
+                rows.append({
+                    'name': name,
+                    'w_p': round(row['w_p'] * 100, 2),
+                    'w_b': round(row['w_b'] * 100, 2),
+                    'diff': round((row['w_p'] - row['w_b']) * 100, 2),
+                })
+            return sorted(rows, key=lambda r: r['diff'])
+
+        heatmap_pt = _build_1d_heatmap(results_data['by_property_type']['summary'], 'PropertyType')
+        heatmap_cbsa = _build_1d_heatmap(results_data['by_cbsa']['summary'], 'CBSAName')
+
         # Trailing period label
         n_q = TRAILING_PERIOD_DEFS.get(trailing_key)
         if n_q is None:
@@ -649,6 +669,8 @@ def results():
                                totals=totals,
                                details=details,
                                heatmap=heatmap,
+                               heatmap_pt=heatmap_pt,
+                               heatmap_cbsa=heatmap_cbsa,
                                common_periods=common_periods,
                                as_of=as_of,
                                trailing_key=trailing_key,
