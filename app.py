@@ -608,6 +608,23 @@ def results():
             summaries['by_held_sold'] = to_records(results_data['by_held_sold']['summary'])
             details['by_held_sold'] = detail_to_records(results_data['by_held_sold']['detail'])
 
+        # Build heatmap data: PropertyType (columns) x CBSA (rows), cell = w_p - w_b
+        heatmap = {'property_types': [], 'cbsas': [], 'cells': {}}
+        cross_summary = results_data['by_property_type_cbsa']['summary']
+        if not cross_summary.empty:
+            pts = sorted(cross_summary['PropertyType'].dropna().unique())
+            pts = [p for p in pts if p != 'Residual/Other']
+            cbsas = sorted(cross_summary['CBSAName'].dropna().unique())
+            cbsas = [c for c in cbsas if c != 'Residual/Other']
+            heatmap['property_types'] = pts
+            heatmap['cbsas'] = cbsas
+            for _, row in cross_summary.iterrows():
+                pt = row.get('PropertyType')
+                cbsa = row.get('CBSAName')
+                if pt in pts and cbsa in cbsas:
+                    diff = row['w_p'] - row['w_b']
+                    heatmap['cells'][(pt, cbsa)] = round(diff * 100, 2)
+
         # Trailing period label
         n_q = TRAILING_PERIOD_DEFS.get(trailing_key)
         if n_q is None:
@@ -621,6 +638,7 @@ def results():
                                summaries=summaries,
                                totals=totals,
                                details=details,
+                               heatmap=heatmap,
                                common_periods=common_periods,
                                as_of=as_of,
                                trailing_key=trailing_key,
