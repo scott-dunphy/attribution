@@ -142,7 +142,7 @@ def _get_cbsa_map_path():
 
 
 def _load_overrides():
-    """Load property sold flags from CSV. Returns dict of {PropertyID: {sold}}."""
+    """Load property overrides from CSV. Returns dict of {PropertyID: {sold, cbsa}}."""
     path = _get_overrides_path()
     if not path or not os.path.exists(path):
         return {}
@@ -150,23 +150,31 @@ def _load_overrides():
         df = pd.read_csv(path, dtype=str).fillna('')
         overrides = {}
         for _, row in df.iterrows():
-            overrides[row['PropertyID']] = {
-                'sold': row.get('Sold', '0') == '1',
-            }
+            entry = {}
+            if row.get('Sold', '0') == '1':
+                entry['sold'] = True
+            if row.get('CBSA', ''):
+                entry['cbsa'] = row['CBSA']
+            if entry:
+                overrides[row['PropertyID']] = entry
         return overrides
     except Exception:
         return {}
 
 
 def _save_overrides(overrides):
-    """Save property sold flags to CSV."""
+    """Save property overrides (sold flags + per-property CBSA) to CSV."""
     path = _get_overrides_path()
     if not path:
         return
     rows = []
     for prop_id, vals in overrides.items():
-        if vals.get('sold'):
-            rows.append({'PropertyID': prop_id, 'Sold': '1'})
+        if vals.get('sold') or vals.get('cbsa'):
+            rows.append({
+                'PropertyID': prop_id,
+                'Sold': '1' if vals.get('sold') else '0',
+                'CBSA': vals.get('cbsa', ''),
+            })
     if rows:
         pd.DataFrame(rows).to_csv(path, index=False)
     elif os.path.exists(path):
@@ -203,6 +211,12 @@ def _get_sold_properties():
     return [pid for pid, v in overrides.items() if v.get('sold')]
 
 
+def _get_property_cbsa_overrides():
+    """Return dict of {PropertyID: new_cbsa} for per-property CBSA overrides."""
+    overrides = _load_overrides()
+    return {pid: v['cbsa'] for pid, v in overrides.items() if v.get('cbsa')}
+
+
 def _get_cbsa_remaps():
     """Return dict of {original_cbsa: new_cbsa} for CBSA overrides."""
     return _load_cbsa_map()
@@ -223,6 +237,12 @@ def _load_portfolio_with_overrides(p_path):
         cbsa_map = _get_cbsa_remaps()
         if cbsa_map and 'CBSAName' in raw_df.columns:
             raw_df['CBSAName'] = raw_df['CBSAName'].replace(cbsa_map)
+        # Apply per-property CBSA overrides (takes precedence over CBSA-level remaps)
+        prop_cbsa = _get_property_cbsa_overrides()
+        if prop_cbsa and 'PropertyID' in raw_df.columns:
+            pid_col = raw_df['PropertyID'].astype(str)
+            for pid, new_cbsa in prop_cbsa.items():
+                raw_df.loc[pid_col == str(pid), 'CBSAName'] = new_cbsa
         # Apply sold flags
         sold_props = _get_sold_properties()
         if sold_props and 'PropertyID' in raw_df.columns:
@@ -249,14 +269,19 @@ def _get_property_list(p_path):
 
     # Apply CBSA remaps so the list reflects current state
     cbsa_map = _get_cbsa_remaps()
+    prop_cbsa = _get_property_cbsa_overrides()
 
     props = []
     for pid, group in raw_df.groupby('PropertyID'):
         first = group.iloc[0]
         last = group.sort_values(['Year', 'Quarter']).iloc[-1]
         original_cbsa = first.get('CBSAName', '')
-        # Use remapped CBSA if one exists for this CBSA
-        display_cbsa = cbsa_map.get(original_cbsa, original_cbsa)
+        # Per-property override takes precedence over CBSA-level remap
+        pid_str = str(pid)
+        if pid_str in prop_cbsa:
+            display_cbsa = prop_cbsa[pid_str]
+        else:
+            display_cbsa = cbsa_map.get(original_cbsa, original_cbsa)
         props.append({
             'PropertyID': pid,
             'PropertyName': first.get('PropertyName', ''),
@@ -389,6 +414,7 @@ def properties():
 
     sold_properties = _get_sold_properties()
     cbsa_remaps = _get_cbsa_remaps()
+    property_cbsa_overrides = _get_property_cbsa_overrides()
 
     # Get benchmark CBSAs for mismatch detection
     benchmark_cbsas = _get_benchmark_cbsas(b_path) if b_path and os.path.exists(b_path) else []
@@ -406,6 +432,7 @@ def properties():
                            properties=prop_list,
                            sold_properties=sold_properties,
                            cbsa_remaps=cbsa_remaps,
+                           property_cbsa_overrides=property_cbsa_overrides,
                            benchmark_cbsas=benchmark_cbsas,
                            as_of=as_of)
 
@@ -417,12 +444,15 @@ def save_overrides_route():
     if not data:
         return jsonify({'error': 'Missing data'}), 400
 
-    # Save sold flags (per property)
-    sold_overrides = {}
+    # Build combined overrides (sold flags + per-property CBSA)
+    overrides = {}
     for prop_id, vals in data.get('sold', {}).items():
         if vals:
-            sold_overrides[str(prop_id)] = {'sold': True}
-    _save_overrides(sold_overrides)
+            overrides.setdefault(str(prop_id), {})['sold'] = True
+    for prop_id, cbsa in data.get('property_cbsa', {}).items():
+        if cbsa:
+            overrides.setdefault(str(prop_id), {})['cbsa'] = cbsa
+    _save_overrides(overrides)
 
     # Save CBSA remaps (per CBSA, applies to all properties in that CBSA)
     cbsa_map = data.get('cbsa_map', {})

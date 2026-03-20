@@ -63,11 +63,13 @@
                         <td>{{ prop.PropertyID }}</td>
                         <td class="fw-bold">{{ prop.PropertyName }}</td>
                         <td>{{ prop.PropertyType }}</td>
+                        {% set has_prop_override = prop.PropertyID|string in property_cbsa_overrides %}
                         <td class="cbsa-cell" data-property-id="{{ prop.PropertyID }}"
                             data-original-cbsa="{{ prop.OriginalCBSAName }}">
                             <select class="form-select form-select-sm cbsa-remap"
                                     data-property-id="{{ prop.PropertyID }}"
                                     data-original-cbsa="{{ prop.OriginalCBSAName }}"
+                                    data-has-override="{{ 'true' if has_prop_override else 'false' }}"
                                     style="min-width: 280px;">
                                 {% if prop.OriginalCBSAName not in benchmark_cbsas %}
                                 <option value="{{ prop.OriginalCBSAName }}" {{ 'selected' if not is_remapped }}>
@@ -146,21 +148,52 @@ $(document).ready(function() {
     $('.cbsa-remap').on('change', function() {
         var original = $(this).data('original-cbsa');
         var val = $(this).val();
+        var changedSelect = $(this);
+        var pid = String(changedSelect.data('property-id'));
 
-        // Sync all dropdowns with the same original CBSA
+        // Count how many other properties share this original CBSA
+        var sameCount = 0;
         $('.cbsa-remap').each(function() {
-            if ($(this).data('original-cbsa') === original) {
-                $(this).val(val);
-                var row = $(this).closest('tr');
-                // Highlight remapped rows with info color, mismatched with danger
-                row.removeClass('table-danger table-info');
-                if (val !== original) {
-                    row.addClass('table-info');
-                } else if (benchmarkCbsas.indexOf(val) === -1) {
-                    row.addClass('table-danger');
-                }
+            if ($(this).data('original-cbsa') === original && String($(this).data('property-id')) !== pid) {
+                sameCount++;
             }
         });
+
+        // Mark this property as having a per-property override
+        changedSelect.data('has-override', 'true');
+
+        // Update this row's styling
+        var row = changedSelect.closest('tr');
+        row.removeClass('table-danger table-info');
+        if (val !== original) {
+            row.addClass('table-info');
+        } else if (benchmarkCbsas.indexOf(val) === -1) {
+            row.addClass('table-danger');
+        }
+
+        // If other properties share this CBSA, ask whether to apply to all
+        if (sameCount > 0) {
+            var applyAll = confirm(
+                'Apply this CBSA change to all ' + (sameCount + 1) +
+                ' properties in "' + original + '"?\n\n' +
+                'OK = Apply to all\nCancel = Only this property'
+            );
+            if (applyAll) {
+                $('.cbsa-remap').each(function() {
+                    if ($(this).data('original-cbsa') === original) {
+                        $(this).val(val);
+                        $(this).data('has-override', 'false');
+                        var r = $(this).closest('tr');
+                        r.removeClass('table-danger table-info');
+                        if (val !== original) {
+                            r.addClass('table-info');
+                        } else if (benchmarkCbsas.indexOf(val) === -1) {
+                            r.addClass('table-danger');
+                        }
+                    }
+                });
+            }
+        }
         updateMismatchBadge();
     });
 
@@ -179,21 +212,43 @@ $(document).ready(function() {
             }
         });
 
-        // Collect CBSA remaps (per original CBSA — one entry per unique CBSA)
+        // Collect CBSA changes — separate per-property overrides from CBSA-level remaps
         var cbsaMap = {};
+        var propertyCbsa = {};
+
+        // First pass: group by original CBSA to detect if all properties agree
+        var cbsaGroups = {};
         $('.cbsa-remap').each(function() {
             var original = $(this).data('original-cbsa');
             var val = $(this).val();
-            if (val !== original) {
-                cbsaMap[original] = val;
-            }
+            var propId = String($(this).data('property-id'));
+            var hasOverride = $(this).data('has-override') === 'true' || $(this).data('has-override') === true;
+            if (!cbsaGroups[original]) cbsaGroups[original] = [];
+            cbsaGroups[original].push({propId: propId, val: val, hasOverride: hasOverride});
         });
+
+        // Second pass: if all properties in a CBSA have the same value,
+        // treat as a CBSA-level remap; otherwise save per-property overrides
+        for (var orig in cbsaGroups) {
+            var entries = cbsaGroups[orig];
+            var allSame = entries.every(function(e) { return e.val === entries[0].val; });
+            if (allSame && entries[0].val !== orig) {
+                cbsaMap[orig] = entries[0].val;
+            } else {
+                // Save individual overrides for properties that differ from original
+                for (var i = 0; i < entries.length; i++) {
+                    if (entries[i].val !== orig) {
+                        propertyCbsa[entries[i].propId] = entries[i].val;
+                    }
+                }
+            }
+        }
 
         $.ajax({
             url: '{{ url_for("save_overrides_route") }}',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({sold: sold, cbsa_map: cbsaMap}),
+            data: JSON.stringify({sold: sold, cbsa_map: cbsaMap, property_cbsa: propertyCbsa}),
             success: function() {
                 window.location.href = '{{ url_for("results", as_of=as_of[0]|string + "-" + as_of[1]|string) }}';
             },
